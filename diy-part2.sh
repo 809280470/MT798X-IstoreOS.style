@@ -10,8 +10,8 @@
 # See /LICENSE for more information.
 #
 
-# 自定义默认网关，后方的192.168.61.1即是可自定义的部分
-sed -i 's/192.168.1.1/192.168.30.1/g' package/base-files/files/bin/config_generate
+# 自定义默认网关，后方的192.168.30.1即是可自定义的部分
+sed -i 's/192.168.[0-9]*.[0-9]*/192.168.30.1/g' package/base-files/files/bin/config_generate
 
 # 自定义主机名
 #sed -i "s/hostname='ImmortalWrt'/hostname='360T7'/g" package/base-files/files/bin/config_generate
