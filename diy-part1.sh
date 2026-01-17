@@ -18,6 +18,7 @@ echo 'src-git nas_luci https://github.com/linkease/nas-packages-luci.git;main' >
 # 科学插件
 echo 'src-git helloworld https://github.com/fw876/helloworld.git' >> feeds.conf.default
 echo 'src-git openclash https://github.com/vernesong/OpenClash.git' >> feeds.conf.default
+echo 'src-git momo https://github.com/nikkinikki-org/OpenWrt-momo.git' >> feeds.conf.default
 echo 'src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git' >> feeds.conf.default
 echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall.git;main' >> feeds.conf.default
 echo 'src-git passwall2 https://github.com/xiaorouji/openwrt-passwall2.git;main' >> feeds.conf.default
@@ -29,4 +30,5 @@ git clone --depth=1 https://github.com/eamonxg/luci-app-aurora-config.git packag
 git clone --depth=1 https://github.com/sirpdboy/luci-theme-kucat.git package/luci-theme-kucat
 git clone --depth=1 -b master https://github.com/sirpdboy/luci-app-kucat-config.git package/luci-app-kucat-config
 
+git clone --depth=1 https://github.com/asvow/luci-app-tailscale.git package/luci-app-tailscale
 git clone --depth=1 https://github.com/EasyTier/luci-app-easytier.git package/luci-app-easytier
