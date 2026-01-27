@@ -45,18 +45,21 @@ jobs:
     - name: Checkout
       uses: actions/checkout@main
 
-    - name: 释放Ubuntu磁盘空间
-      uses: endersonmenezes/free-disk-space@v2
+    - name: Free Disk Space (Ubuntu)
+      uses: jlumbroso/free-disk-space@main
       with:
-        remove_android: true
-        remove_dotnet: true
-        remove_haskell: true
-        remove_tool_cache: true
-        remove_swap: true
-        remove_packages: "azure-cli google-cloud-cli microsoft-edge-stable google-chrome-stable firefox postgresql* temurin-* *llvm* mysql* dotnet-sdk-*"
-        remove_packages_one_command: true
-        remove_folders: "/usr/share/swift /usr/share/miniconda /usr/share/az* /usr/share/glade* /usr/local/lib/node_modules /usr/local/share/chromium /usr/local/share/powershell"
-        testing: false
+        # this might remove tools that are actually needed,
+        # if set to "true" but frees about 6 GB
+        tool-cache: true
+        
+        # all of these default to true, but feel free to set to
+        # "false" if necessary for your workflow
+        android: true
+        dotnet: true
+        haskell: true
+        large-packages: true
+        docker-images: true
+        swap-storage: true
         
     - name: Initialization Environment
       env:
@@ -75,7 +78,7 @@ jobs:
         sudo apt -yqq install dos2unix libfuse-dev
         sudo bash -c 'bash <(curl -sL https://build-scripts.immortalwrt.org/init_build_environment.sh)'
         
-        # 3. 创建工作目录 (适配你原本的逻辑)
+        # 3. 创建工作目录 
         sudo mkdir -p /workdir
         sudo chown $USER:$GROUPS /workdir
 
