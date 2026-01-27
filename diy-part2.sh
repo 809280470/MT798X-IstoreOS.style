@@ -31,6 +31,26 @@ rm -rf temp_packages
 
 echo "Rust has been replaced with a stable version!"
 
+# =========================================================
+# 修复 QuickStart 首页温度显示问题
+# 逻辑：将仓库中的 istore_backend.lua 复制到 files 目录进行强制覆盖
+# =========================================================
+
+# 1. 创建目标目录结构 (相当于路由器的 /usr/lib/lua/luci/controller/)
+mkdir -p files/usr/lib/lua/luci/controller/
+
+# 2. 复制文件并覆盖
+# 注意：.. 代表上级目录，因为 diy-part2.sh 运行在 openwrt/ 目录下
+if [ -f "../istore/istore_backend.lua" ]; then
+    echo "Found custom istore_backend.lua, overwriting..."
+    cp -f ../istore/istore_backend.lua files/usr/lib/lua/luci/controller/istore_backend.lua
+    
+    # 3. 赋予执行权限 (防止权限问题导致无法读取)
+    chmod 644 files/usr/lib/lua/luci/controller/istore_backend.lua
+else
+    echo "WARNING: Custom istore_backend.lua not found!"
+fi
+
 #修复DiskMan编译失败
 DM_FILE="./luci-app-diskman/applications/luci-app-diskman/Makefile"
 if [ -f "$DM_FILE" ]; then
