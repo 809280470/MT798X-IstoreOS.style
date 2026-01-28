@@ -25,6 +25,7 @@ echo 'src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.gi
 echo 'src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main' >> feeds.conf.default
 # 插件添加
 git clone https://github.com/sirpdboy/luci-app-watchdog package/watchdog
+git clone https://github.com/sirpdboy/luci-app-taskplan package/taskplan
 git clone https://github.com/iv7777/luci-app-authshield package/authshield
 git clone https://github.com/EasyTier/luci-app-easytier package/easytier
 git clone https://github.com/Tokisaki-Galaxy/luci-app-tailscale-community package/tailscale
