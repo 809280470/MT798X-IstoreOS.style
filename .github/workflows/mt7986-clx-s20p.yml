@@ -9,8 +9,9 @@ name: mt7986-clx-s20p
 env:
   # 设备名称，用于生成发布标签
   DEVICE_NAME: mt7986-clx-s20p
-  # 源码仓库地址 (Dailook版 ImmortalWrt)
+  # 源码仓库地址
   REPO_URL: https://github.com/dailook/immortalwrt-mt798x-6.6
+  #REPO_URL: https://github.com/padavanonly/immortalwrt-mt798x-6.6
   # 源码分支
   REPO_BRANCH: openwrt-24.10-6.6
   # Feeds 配置文件名
@@ -53,7 +54,7 @@ jobs:
 
     # 1. 清理磁盘空间
     # 使用 jlumbroso 插件删除预装的大型软件(Android/Dotnet等)
-    - name: Free Disk Space (Ubuntu)
+    - name: Free Disk Space (清理磁盘空间)
       uses: jlumbroso/free-disk-space@main
       with:
         tool-cache: true
@@ -67,7 +68,7 @@ jobs:
         
     # 2. 初始化编译环境
     # 使用 ImmortalWrt 官方脚本，自动安装 gcc/python/go/rust 等依赖
-    - name: Initialization Environment
+    - name: Initialization Environment （初始化编译环境）
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
@@ -85,7 +86,7 @@ jobs:
         sudo chown $USER:$GROUPS /workdir
 
     # 3. 克隆源码
-    - name: Clone source code
+    - name: Clone source code （克隆源码）
       working-directory: /workdir
       run: |
         df -hT $PWD
@@ -93,7 +94,7 @@ jobs:
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
     # 4. 加载自定义 Feeds (diy-part1.sh)
-    - name: Load custom feeds
+    - name: Load custom feeds （加载自定义 Feeds）
       run: |
         [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
         chmod +x $DIY_P1_SH
@@ -102,14 +103,14 @@ jobs:
 
     # 5. 更新并安装 Feeds (已移除 Priority Feeds 步骤)
     # 恢复为标准的 OpenWrt 流程：更新所有 -> 安装所有
-    - name: Update feeds
+    - name: Update feeds （Feeds更新）
       run: cd openwrt && ./scripts/feeds update -a
 
-    - name: Install feeds
+    - name: Install feeds （Feeds安装）
       run: cd openwrt && ./scripts/feeds install -a
 
     # 6. 加载自定义配置 (diy-part2.sh)
-    - name: Load custom configuration
+    - name: Load custom configuration （加载自定义配置diy-part2）
       run: |
         [ -e files ] && mv files openwrt/files
         [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
@@ -118,12 +119,12 @@ jobs:
         $GITHUB_WORKSPACE/$DIY_P2_SH
 
     # 7. SSH 调试 (可选)
-    - name: SSH connection to Actions
+    - name: SSH connection to Actions （SSH 调试）
       uses: mxschmitt/action-tmate@v3
       if: (github.event.inputs.ssh == 'true' && github.event.inputs.ssh  != 'false') || contains(github.event.action, 'ssh')
 
     # 8. 下载软件包 (预下载以防编译时网络中断)
-    - name: Download package
+    - name: Download package （下载软件包）
       id: package
       run: |
         cd openwrt
@@ -132,9 +133,8 @@ jobs:
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
-    # 9. 编译固件
-    # 包含重试逻辑：先多核编译，失败后单核编译并输出详细日志
-    - name: Compile the firmware
+    # 9. 包含重试逻辑：先多核编译，失败后单核编译并输出详细日志
+    - name: Compile the firmware （编译固件）
       id: compile
       run: |
         cd openwrt
@@ -145,12 +145,12 @@ jobs:
         [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
         echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
 
-    - name: Check space usage
+    - name: Check space usage （编译后容量确认）
       if: (!cancelled())
       run: df -hT
 
     # 10. 上传 bin 目录 (Artifacts)
-    - name: Upload bin directory
+    - name: Upload bin directory （上传 bin 目录）
       uses: actions/upload-artifact@main
       if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
       with:
@@ -158,7 +158,7 @@ jobs:
         path: openwrt/bin
 
     # 11. 整理固件文件
-    - name: Organize files
+    - name: Organize files （整理固件文件）
       id: organize
       if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
       run: |
@@ -168,7 +168,7 @@ jobs:
         echo "status=success" >> $GITHUB_OUTPUT
 
     # 12. 上传固件目录 (Artifacts)
-    - name: Upload firmware directory
+    - name: Upload firmware directory （上传固件目录）
       uses: actions/upload-artifact@main
       if: steps.organize.outputs.status == 'success' && !cancelled()
       with:
@@ -196,7 +196,7 @@ jobs:
         echo "url=$(cat wetransfer.log | grep https | cut -f3 -d" ")" >> $GITHUB_OUTPUT
 
     # 15. 生成发布标签和日志
-    - name: Generate release tag
+    - name: Generate release tag （生成发布标签和日志）
       id: tag
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       run: |
@@ -244,7 +244,7 @@ jobs:
 
     # 16. 发布到 GitHub Release
     # 使用 v2 版本插件，并增加了文件过滤，防止上传 35GB 裸文件导致失败
-    - name: Upload firmware to release
+    - name: Upload firmware to release （发布到 GitHub Release）
       uses: softprops/action-gh-release@v2
       if: steps.tag.outputs.status == 'success' && !cancelled()
       env:
@@ -260,14 +260,14 @@ jobs:
           ${{ env.FIRMWARE }}/*.tar.gz
 
     # 17. 清理旧的工作流记录
-    - name: Delete workflow runs
+    - name: Delete workflow runs （清理旧的工作流记录）
       uses: GitRML/delete-workflow-runs@main
       with:
         retain_days: 1
         keep_minimum_runs: 10
 
     # 18. 清理旧的 Release 发布
-    - name: Remove old Releases
+    - name: Remove old Releases （清理旧的 Release 发布）
       uses: dev-drprasad/delete-older-releases@v0.2.1
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       with:
