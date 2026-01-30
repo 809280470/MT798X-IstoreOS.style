@@ -32,8 +32,7 @@ env:
   UPLOAD_RELEASE: true
   TZ: Asia/Shanghai
 
-on:
-  push:
+"on":
   repository_dispatch:
   workflow_dispatch:
     inputs:
