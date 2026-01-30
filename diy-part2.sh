@@ -10,27 +10,71 @@
 # See /LICENSE for more information.
 #
 
-# =========================================================
-# 修复 Rust 编译失败：替换为 ImmortalWrt 稳定版 Rust 
-# =========================================================
+echo "=========================================="
+echo "DIY Part 2: 修复 Rust LLVM 配置"
+echo "=========================================="
 
-# 1. 删除当前源码中有问题/下载失败的 Rust
-echo "Removing broken Rust package..."
-rm -rf feeds/packages/lang/rust
+cd openwrt || exit 1
+echo "当前目录: $(pwd)"
 
-# 2. 克隆 ImmortalWrt 其他 分支的 packages
-echo "Cloning stable Rust from ImmortalWrt..."
-git clone --depth 1 -b openwrt-23.05 https://github.com/immortalwrt/packages.git temp_packages
+# ==========================================
+# 1. 修复 Rust ci-llvm 配置（解决 LLVM 不匹配）
+# ==========================================
+echo ">>> 修复 Rust ci-llvm 配置..."
 
-# 3. 偷梁换柱：把稳定的 Rust 搬进来
-cp -r temp_packages/lang/rust feeds/packages/lang/
+RUST_MAKEFILE="feeds/packages/lang/rust/Makefile"
 
-# 4. 清理现场
-rm -rf temp_packages
+if [ -f "$RUST_MAKEFILE" ]; then
+    echo "找到 Rust Makefile: $RUST_MAKEFILE"
+    
+    # 备份原文件（便于调试）
+    cp "$RUST_MAKEFILE" "$RUST_MAKEFILE.bak"
+    
+    # 禁用 ci-llvm（使用系统 LLVM 或自编译，避免版本冲突）
+    if grep -q "ci-llvm=true" "$RUST_MAKEFILE"; then
+        sed -i 's/ci-llvm=true/ci-llvm=false/g' "$RUST_MAKEFILE"
+        echo "✅ ci-llvm 已禁用（将使用系统 LLVM）"
+    else
+        echo "ℹ️ ci-llvm 已禁用或配置项不存在"
+    fi
+    
+    # 显示当前配置（调试用）
+    grep -n "ci-llvm" "$RUST_MAKEFILE" || true
+else
+    echo "❌ 错误：找不到 $RUST_MAKEFILE"
+    echo "检查 feeds 目录结构："
+    find feeds -name "rust" -type d 2>/dev/null | head -5
+    exit 1
+fi
 
-echo "Rust has been replaced with stable version 1.85.0!"
-# 目前还可以解决编译失败的问题，但是编译时间会相比正常编译慢大概一个小时
+# ==========================================
+# 2. 启用 LLVM BPF 支持（Rust 编译需要）
+# ==========================================
+echo ">>> 启用 LLVM BPF 支持..."
 
+if [ -f ".config" ]; then
+    # 如果配置文件中还没有 llvm-bpf，添加它
+    if ! grep -q "^CONFIG_PACKAGE_llvm-bpf=y" ".config"; then
+        echo "CONFIG_PACKAGE_llvm-bpf=y" >> .config
+        echo "✅ 已添加 llvm-bpf 支持到 .config"
+    else
+        echo "ℹ️ llvm-bpf 已启用"
+    fi
+    
+    # 同时确保 host 工具链支持（可选但推荐）
+    if ! grep -q "^CONFIG_USE_LLVM_HOST=" ".config"; then
+        # 设置为 y 使用系统 LLVM（如果可用），或 n 让 OpenWrt 自行编译
+        echo "CONFIG_USE_LLVM_HOST=y" >> .config
+        echo "✅ 已启用 HOST LLVM 支持"
+    fi
+else
+    echo "⚠️ 警告：.config 不存在，跳过 llvm-bpf 配置"
+    echo "请确保 CONFIG_FILE 已正确加载"
+fi
+
+echo "=========================================="
+echo "Rust 修复完成"
+echo "=========================================="
 # =========================================================
 # 智能修复脚本（兼容 package/ 和 feeds/）
 # =========================================================
