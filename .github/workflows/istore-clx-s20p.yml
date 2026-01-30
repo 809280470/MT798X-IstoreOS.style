@@ -33,9 +33,7 @@ env:
   TZ: Asia/Shanghai
 
 "on":
-  push:
-    paths-ignore:
-      - '.github/workflows/**'
+  # 完全删除 push，只有手动和 API 触发
   repository_dispatch:
   workflow_dispatch:
     inputs:
