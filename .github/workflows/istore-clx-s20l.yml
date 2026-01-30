@@ -8,7 +8,7 @@
 # Description: Build OpenWrt using GitHub Actions
 #
 
-name: mt7986-clx-s20l
+name: istore-clx-s20l
 
 env:
   #REPO_URL: https://github.com/padavanonly/immortalwrt-mt798x-6.6
