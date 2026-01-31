@@ -14,62 +14,51 @@ echo "=========================================="
 echo "DIY Part 2: 修复 Rust LLVM 配置"
 echo "=========================================="
 
-echo "当前目录: $(pwd)"
+# 拉取官方 Makefile 提取版本信息
+curl -fsSL \
+  https://raw.githubusercontent.com/immortalwrt/packages/openwrt-24.10/lang/rust/Makefile \
+  -o /tmp/rust-imm.mk
 
-# ==========================================
-# 1. 修复 Rust ci-llvm 配置（解决 LLVM 不匹配）
-# ==========================================
-echo ">>> 修复 Rust ci-llvm 配置..."
+VER=$(grep '^PKG_VERSION:=' /tmp/rust-imm.mk | cut -d'=' -f2 | tr -d ' ')
+HASH=$(grep '^PKG_HASH:=' /tmp/rust-imm.mk | cut -d'=' -f2 | tr -d ' ')
 
-RUST_MAKEFILE="feeds/packages/lang/rust/Makefile"
+echo "目标版本: $VER"
+echo "目标哈希: $HASH"
 
-if [ -f "$RUST_MAKEFILE" ]; then
-    echo "找到 Rust Makefile: $RUST_MAKEFILE"
-    
-    # 备份原文件（便于调试）
-    cp "$RUST_MAKEFILE" "$RUST_MAKEFILE.bak"
-    
-    # 禁用 ci-llvm（使用系统 LLVM 或自编译，避免版本冲突）
-    if grep -q "ci-llvm=true" "$RUST_MAKEFILE"; then
-        sed -i 's/ci-llvm=true/ci-llvm=false/g' "$RUST_MAKEFILE"
-        echo "✅ ci-llvm 已禁用（将使用系统 LLVM）"
-    else
-        echo "ℹ️ ci-llvm 已禁用或配置项不存在"
-    fi
-    
-    # 显示当前配置（调试用）
-    grep -n "ci-llvm" "$RUST_MAKEFILE" || true
-else
-    echo "❌ 错误：找不到 $RUST_MAKEFILE"
-    echo "检查 feeds 目录结构："
-    find feeds -name "rust" -type d 2>/dev/null | head -5
+# 同时更新本地 Makefile（确保版本一致）
+sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=$VER/" feeds/packages/lang/rust/Makefile
+sed -i "s/^PKG_HASH:=.*/PKG_HASH:=$HASH/" feeds/packages/lang/rust/Makefile
+
+# 清理旧的 Rust 包（如果有）
+echo ">>> 清理旧版本 Rust 包..."
+rm -f dl/rustc-1.*-src.tar.xz* 2>/dev/null || true
+
+# 预下载目标版本
+RUST_FILE="rustc-${VER}-src.tar.xz"
+RUST_URL="https://static.rust-lang.org/dist/${RUST_FILE}"
+
+echo ">>> 下载 Rust $VER..."
+wget -q --show-progress -O "dl/${RUST_FILE}" "$RUST_URL" || \
+curl -fSL -o "dl/${RUST_FILE}" "$RUST_URL"
+
+# 验证哈希
+echo ">>> 验证文件完整性..."
+DL_HASH=$(sha256sum "dl/${RUST_FILE}" | cut -d' ' -f1)
+
+if [ "$DL_HASH" != "$HASH" ]; then
+    echo "❌ 哈希不匹配！"
+    echo "期望: $HASH"
+    echo "实际: $DL_HASH"
+    rm -f "dl/${RUST_FILE}"
     exit 1
 fi
 
-# ==========================================
-# 2. 启用 LLVM BPF 支持（Rust 编译需要）
-# ==========================================
-echo ">>> 启用 LLVM BPF 支持..."
+echo "✅ Rust $VER 已就绪: dl/${RUST_FILE}"
 
-if [ -f ".config" ]; then
-    # 如果配置文件中还没有 llvm-bpf，添加它
-    if ! grep -q "^CONFIG_PACKAGE_llvm-bpf=y" ".config"; then
-        echo "CONFIG_PACKAGE_llvm-bpf=y" >> .config
-        echo "✅ 已添加 llvm-bpf 支持到 .config"
-    else
-        echo "ℹ️ llvm-bpf 已启用"
-    fi
-    
-    # 同时确保 host 工具链支持（可选但推荐）
-    if ! grep -q "^CONFIG_USE_LLVM_HOST=" ".config"; then
-        # 设置为 y 使用系统 LLVM（如果可用），或 n 让 OpenWrt 自行编译
-        echo "CONFIG_USE_LLVM_HOST=y" >> .config
-        echo "✅ 已启用 HOST LLVM 支持"
-    fi
-else
-    echo "⚠️ 警告：.config 不存在，跳过 llvm-bpf 配置"
-    echo "请确保 CONFIG_FILE 已正确加载"
-fi
+# 清理临时文件
+rm -f /tmp/rust-imm.mk
+
+echo ">>> Rust 准备完成"
 
 echo "=========================================="
 echo "Rust 修复完成"
