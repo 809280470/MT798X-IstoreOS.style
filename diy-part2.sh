@@ -11,152 +11,66 @@
 #
 
 
-#
-# DIY Part 2 - 修复Rust版本并预下载
-#
 set -e
 
 echo "=========================================="
-echo "DIY Part 2: Fix Rust Version"
+echo "DIY Part 2: Configuring Rust Local Build"
 echo "=========================================="
 
-cd "$(dirname "$0")" || exit 1
-echo "Current dir: $(pwd)"
-
-# ==========================================
-# 1. Get ImmortalWrt official Rust config
-# ==========================================
-echo ">>> Getting ImmortalWrt Rust config..."
-
-IMM_URL="https://raw.githubusercontent.com/immortalwrt/packages/openwrt-24.10/lang/rust/Makefile"
-TMP_MK="/tmp/rust_imm.mk"
-
-curl -fsSL "$IMM_URL" -o "$TMP_MK" || {
-    echo "ERROR: Failed to download $IMM_URL"
-    exit 1
-}
-
-# Extract version and hash
-RUST_VER=$(grep '^PKG_VERSION:=' "$TMP_MK" | head -1 | cut -d'=' -f2 | tr -d ' ')
-RUST_HASH=$(grep '^PKG_HASH:=' "$TMP_MK" | head -1 | cut -d'=' -f2 | tr -d ' ')
-
-if [ -z "$RUST_VER" ] || [ -z "$RUST_HASH" ]; then
-    echo "ERROR: Failed to parse version or hash"
-    cat "$TMP_MK" | head -20
-    exit 1
-fi
-
-echo "Target version: $RUST_VER"
-echo "Target hash: ${RUST_HASH:0:16}..."
-
-# ==========================================
-# 2. Update local Makefile
-# ==========================================
-echo ">>> Updating local Rust Makefile..."
+# 确保在源码根目录
+[ -f "scripts/feeds" ] || { echo "Error: Not in OpenWrt root"; exit 1; }
 
 RUST_MK="feeds/packages/lang/rust/Makefile"
 
+# 1. 自动补全 Rust 定义 (防止 Feed 拉取缺失)
 if [ ! -f "$RUST_MK" ]; then
-    echo "ERROR: Not found: $RUST_MK"
-    exit 1
+    echo ">>> Rust Makefile missing, forcing sync from ImmortalWrt..."
+    mkdir -p feeds/packages/lang
+    git clone --depth=1 https://github.com/immortalwrt/packages.git /tmp/imm_pkgs
+    cp -r /tmp/imm_pkgs/lang/rust feeds/packages/lang/
+    rm -rf /tmp/imm_pkgs
 fi
 
-cp "$RUST_MK" "$RUST_MK.bak"
+# 2. 修改配置：强制本地编译 LLVM 和 Rust
+echo ">>> Modifying Makefile for local compilation..."
 
-# Replace version and hash
-sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=$RUST_VER/" "$RUST_MK"
-sed -i "s/^PKG_HASH:=.*/PKG_HASH:=$RUST_HASH/" "$RUST_MK"
+# 获取最新版本号以保证兼容性 (从 24.10 分支获取)
+IMM_URL="https://raw.githubusercontent.com/immortalwrt/packages/openwrt-24.10/lang/rust/Makefile"
+curl -fsSL "$IMM_URL" -o /tmp/rust_ref.mk
+RUST_VER=$(grep '^PKG_VERSION:=' /tmp/rust_ref.mk | head -1 | cut -d'=' -f2 | tr -d ' ')
+RUST_HASH=$(grep '^PKG_HASH:=' /tmp/rust_ref.mk | head -1 | cut -d'=' -f2 | tr -d ' ')
 
-# Fix URL (remove trailing spaces, use official)
+if [ -n "$RUST_VER" ]; then
+    sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=$RUST_VER/" "$RUST_MK"
+    sed -i "s/^PKG_HASH:=.*/PKG_HASH:=$RUST_HASH/" "$RUST_MK"
+fi
+
+# 【核心修改】：关闭预编译的 CI LLVM，强制从源码编译
+# 这将解决 "download-ci-llvm" 导致的下载错误或版本不匹配
+sed -i 's/download-ci-llvm=true/download-ci-llvm=false/g' "$RUST_MK"
+# 确保 Makefile 中不包含错误的下载链接后缀
 sed -i 's|^PKG_SOURCE_URL:=.*|PKG_SOURCE_URL:=https://static.rust-lang.org/dist/|' "$RUST_MK"
-sed -i 's/[[:space:]]*$//' "$RUST_MK"
 
-echo "Updated to: $RUST_VER"
+echo "✅ Configuration set: Rust $RUST_VER will be built from source."
 
-# ==========================================
-# 3. Pre-download Rust with mirror fallback
-# ==========================================
-echo ">>> Pre-downloading Rust $RUST_VER..."
-
+# 3. 源码包预下载 (本地编译也需要源码 tar.xz 包)
+# 使用国内镜像加速源码下载
 RUST_FILE="rustc-${RUST_VER}-src.tar.xz"
-DL_PATH="dl/$RUST_FILE"
-SUCCESS=0
-
-# Create dl dir
 mkdir -p dl
-
-# Check if already exists and valid
-if [ -f "$DL_PATH" ]; then
-    echo "File exists, verifying hash..."
-    LOCAL_HASH=$(sha256sum "$DL_PATH" | cut -d' ' -f1)
-    if [ "$LOCAL_HASH" = "$RUST_HASH" ]; then
-        echo "Hash matched, using cached file"
-        SUCCESS=1
-    else
-        echo "Hash mismatch, re-downloading..."
-        rm -f "$DL_PATH"
-    fi
-fi
-
-# Download if needed
-if [ "$SUCCESS" -eq 0 ]; then
-    # Mirror list
+if [ ! -f "dl/$RUST_FILE" ]; then
+    echo ">>> Pre-downloading source tarball..."
     MIRRORS=(
         "https://mirrors.ustc.edu.cn/rust-static/dist/${RUST_FILE}"
         "https://mirrors.tuna.tsinghua.edu.cn/rustup/dist/${RUST_FILE}"
-        "https://static.rust-lang.org/dist/${RUST_FILE}"
     )
-    
     for mirror in "${MIRRORS[@]}"; do
-        echo "Trying mirror: $mirror"
-        
-        # Download with timeout
-        if wget --timeout=120 -O "${DL_PATH}.tmp" "$mirror" 2>/dev/null || \
-           curl -fsSL --connect-timeout 120 -o "${DL_PATH}.tmp" "$mirror" 2>/dev/null; then
-            
-            # Verify hash
-            DL_HASH=$(sha256sum "${DL_PATH}.tmp" | cut -d' ' -f1)
-            
-            if [ "$DL_HASH" = "$RUST_HASH" ]; then
-                mv "${DL_PATH}.tmp" "$DL_PATH"
-                echo "Download success from: $mirror"
-                SUCCESS=1
-                break
-            else
-                echo "Hash mismatch, trying next mirror..."
-                rm -f "${DL_PATH}.tmp"
-            fi
-        else
-            echo "Download failed from this mirror"
+        if wget --timeout=30 -O "dl/$RUST_FILE" "$mirror"; then
+            echo "✅ Source tarball cached."
+            break
         fi
     done
 fi
 
-# Check final result
-if [ "$SUCCESS" -ne 1 ]; then
-    echo "ERROR: All mirrors failed for Rust $RUST_VER"
-    exit 1
-fi
-
-echo "Rust $RUST_VER ready at: $DL_PATH"
-
-# ==========================================
-# 4. Fix ci-llvm if needed
-# ==========================================
-echo ">>> Checking ci-llvm setting..."
-
-if grep -q "download-ci-llvm=true" "$RUST_MK"; then
-    echo "Current: ci-llvm=true (using prebuilt LLVM)"
-    echo "To build LLVM from source (more compatible but slower), uncomment below:"
-    # sed -i 's/download-ci-llvm=true/download-ci-llvm=false/g' "$RUST_MK"
-fi
-
-# Cleanup
-rm -f "$TMP_MK"
-
-echo "=========================================="
-echo "Rust fix completed: $RUST_VER"
-echo "=========================================="
 # =========================================================
 # 智能修复脚本（兼容 package/ 和 feeds/）
 # =========================================================
