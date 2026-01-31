@@ -146,6 +146,28 @@ jobs:
     # ==========================================
     # 分步编译策略：解决磁盘空间不足
     # ==========================================
+
+    - name: Prepare toolchain （准备工具链）
+      id: toolchain
+      run: |
+        cd openwrt
+        echo "========================================"
+        echo "Step 0: 编译 Host 工具链"
+        echo "========================================"
+        
+        # 先编译 host 工具和基础 toolchain（为 Rust 准备环境）
+        make tools/install -j$(nproc) || make tools/install -j1 V=s
+        make toolchain/install -j$(nproc) || make toolchain/install -j1 V=s
+        
+        # 验证交叉编译器是否存在
+        if [ -f "staging_dir/toolchain-aarch64_cortex-a53_gcc-*/bin/aarch64-openwrt-linux-musl-gcc" ]; then
+          echo "✅ 交叉编译工具链准备就绪"
+        else
+          echo "⚠️ 警告：可能未找到交叉编译器，但继续尝试..."
+        fi
+        
+        echo "工具链编译完成，磁盘空间:"
+        df -hT /
     
     # 9. 第一步：编译 Rust Host 工具链（占用 15-20GB）
     - name: Compile Rust host tools （编译 Rust 工具链）
