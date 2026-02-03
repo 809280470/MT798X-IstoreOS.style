@@ -30,6 +30,7 @@ git clone --depth=1 https://github.com/sirpdboy/luci-app-watchdog package/watchd
 git clone --depth=1 https://github.com/sirpdboy/luci-app-taskplan package/taskplan
 git clone --depth=1 https://github.com/iv7777/luci-app-authshield package/authshield
 git clone --depth=1 https://github.com/EasyTier/luci-app-easytier package/easytier
+git clone https://github.com/stackia/rtp2httpd.git package/rtp2httpd
 git clone --depth=1 https://github.com/Tokisaki-Galaxy/luci-app-tailscale-community package/tailscale
 
 # 主题
