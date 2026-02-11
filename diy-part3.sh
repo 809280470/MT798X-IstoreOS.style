@@ -43,7 +43,7 @@ fi
 #--------------------------------------------------
 # 2. 获取权威 Rust 版本信息（多级 fallback）
 #--------------------------------------------------
-IMM_URL="https://raw.githubusercontent.com/immortalwrt/packages/openwrt-24.10/lang/rust/Makefile"
+IMM_URL="https://raw.githubusercontent.com/openwrt/packages/openwrt-24.10/lang/rust/Makefile"
 
 echo ">>> Fetching reference Rust Makefile..."
 
