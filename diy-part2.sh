@@ -12,47 +12,41 @@
 
 set -e
 
-echo "=========================================="
-echo "Rust 修复方案：替换为 23.05 稳定版 + 强制本地编译"
-echo "=========================================="
+# =========================================================
+# 修复 Rust 编译失败：替换为 23.05 + 强制本地编译
+# =========================================================
+echo "🔥 Starting Rust Fix Process..."
 
-# 1. 移除当前可能不稳定的 Rust
+# 1. 删除当前 feeds 中不稳定的 Rust
 rm -rf feeds/packages/lang/rust
 
-# 2. 从 openwrt 23.05 分支拉取稳定的 Rust (版本 1.85.0)
-# 虽然我们要本地编译，但使用旧版源码更稳定，兼容性更好
+# 2. 克隆 23.05 分支 (稳定版源码)
 echo ">>> Cloning Rust from ImmortalWrt 23.05 branch..."
-git clone --depth 1 -b openwrt-23.05 https://github.com/openwrt/packages.git temp_packages
+git clone --depth 1 -b openwrt-23.05 https://github.com/immortalwrt/packages.git temp_packages
 
 # 3. 替换
 cp -r temp_packages/lang/rust feeds/packages/lang/
-
-# 4. 清理
 rm -rf temp_packages
 
-echo ">>> Rust replaced with stable version (1.85.0)."
+echo ">>> Rust source replaced."
 
-# 5. 【关键修改】强制关闭 CI 下载，启用本地编译
+# 4. 【修正版】强制关闭 CI 下载，启用本地编译
+# 定义变量
 RUST_MK="feeds/packages/lang/rust/Makefile"
 
-if [ -f "$RUST_MAKEFILE" ]; then
+if [ -f "$RUST_MK" ]; then
     echo ">>> Configuring Rust for LOCAL compilation..."
     
-    # 将 download-ci-llvm = true 替换为 false
-    # 注意：这里处理了可能有空格或没空格的两种情况
-    sed -i 's/download-ci-llvm = true/download-ci-llvm = false/g' "$RUST_MK"
-    sed -i 's/download-ci-llvm=true/download-ci-llvm=false/g' "$RUST_MK"
+    # 使用通配符匹配，防止因空格问题导致替换失败
+    # 将 download-ci-llvm = true (或类似写法) 强制改为 false
+    sed -i 's/download-ci-llvm.*=.*/download-ci-llvm = false/g' "$RUST_MK"
     
     echo "✅ download-ci-llvm has been DISABLED."
-    echo "⚠️  WARNING: This will trigger LLVM compilation."
-    echo "⚠️  Expect compilation time to increase by 1-2 hours."
+    echo "⚠️  WARNING: This will trigger LLVM compilation (Slow & Heavy)."
 else
-    echo "❌ Error: Rust Makefile not found!"
+    echo "❌ Error: Rust Makefile not found at $RUST_MK"
+    exit 1
 fi
-
-echo "=========================================="
-echo "修复完成。准备进行本地编译。"
-echo "=========================================="
 
 # =========================================================
 # 智能修复脚本（兼容 package/ 和 feeds/）
