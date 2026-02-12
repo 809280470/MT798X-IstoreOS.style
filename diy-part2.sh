@@ -10,24 +10,115 @@
 # See /LICENSE for more information.
 #
 
-# =========================================================
-# 修复 Rust 编译失败：替换为 23.05 + 强制本地编译
-# =========================================================
-echo "🔥 Replacing Rust with stable version 1.85.0..."
+echo "=========================================="
+echo "Rust 编译修复脚本 (路径增强版)"
+echo "=========================================="
 
-# 1. 删除当前 feeds 中不稳定的 Rust
-rm -rf feeds/packages/lang/rust
+# 1. 环境检查与路径识别
+# 优先使用脚本后的第一个参数作为路径，否则使用当前路径
+TARGET_DIR="${1:-$(pwd)}"
 
-# 2. 克隆 23.05 分支 (稳定版，下载源正常)
-git clone --depth 1 -b openwrt-23.05 https://github.com/immortalwrt/packages.git temp_packages
+# 检查是否是有效的 OpenWrt 源码目录
+check_openwrt_root() {
+    if [ -f "$1/scripts/feeds" ] && [ -f "$1/Makefile" ]; then
+        return 0
+    else
+        return 1
+    fi
+}
 
-# 3. 替换
-cp -r temp_packages/lang/rust feeds/packages/lang/
+if check_openwrt_root "$TARGET_DIR"; then
+    OPENWRT_ROOT="$TARGET_DIR"
+    echo "✅ 找到 OpenWrt 根目录: $OPENWRT_ROOT"
+else
+    echo "⚠️  在 $TARGET_DIR 未找到 OpenWrt 源码"
+    echo "正在尝试寻找当前目录下的子目录..."
+    # 尝试在子目录中寻找一级
+    SUB_DIR=$(find . -maxdepth 2 -name "scripts" -type d | head -n 1 | xargs dirname)
+    if [ -n "$SUB_DIR" ] && check_openwrt_root "$SUB_DIR"; then
+        OPENWRT_ROOT="$(realpath "$SUB_DIR")"
+        echo "✅ 在子目录中找到 OpenWrt 根目录: $OPENWRT_ROOT"
+    else
+        echo "❌ 错误: 无法确定 OpenWrt 源码根目录。"
+        echo "用法: $0 /your/openwrt/path"
+        exit 1
+    fi
+fi
 
-# 4. 清理临时文件
-rm -rf temp_packages
+# 定义相关路径
+RUST_DIR="$OPENWRT_ROOT/feeds/packages/lang/rust"
+RUST_MK="$RUST_DIR/Makefile"
+DL_DIR="$OPENWRT_ROOT/dl"
 
-echo "✅ Rust has been replaced! (Native CI download will be used)"
+# 2. 确保 Rust 文件夹存在
+if [ ! -d "$RUST_DIR" ]; then
+    echo ">>> Rust 文件夹缺失，正在尝试同步 Feeds..."
+    cd "$OPENWRT_ROOT" || exit
+    ./scripts/feeds update packages
+    ./scripts/feeds install -a -p packages
+    cd - > /dev/null || exit
+fi
+
+# 3. 获取权威版本信息 (使用 24.10 作为参考标准)
+REF_MK="/tmp/rust_ref.mk"
+IMM_URL="https://raw.githubusercontent.com/openwrt/packages/openwrt-24.10/lang/rust/Makefile"
+
+echo ">>> 正在获取远程版本元数据..."
+if ! curl -fsSL "$IMM_URL" -o "$REF_MK"; then
+    echo "⚠️ 无法获取远程 Makefile，将使用本地版本"
+    [ -f "$RUST_MK" ] && cp "$RUST_MK" "$REF_MK" || { echo "❌ 无法找到任何 Makefile"; exit 1; }
+fi
+
+RUST_VER=$(grep '^PKG_VERSION:=' "$REF_MK" | head -1 | cut -d'=' -f2 | tr -d ' ')
+RUST_HASH=$(grep '^PKG_HASH:=' "$REF_MK" | head -1 | cut -d'=' -f2 | tr -d ' ')
+
+echo ">>> 目标 Rust 版本: $RUST_VER"
+
+# 4. 修改 Makefile 参数
+echo ">>> 正在应用优化参数到: $RUST_MK"
+
+# 更新版本号和 Hash
+sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=$RUST_VER/" "$RUST_MK"
+[ -n "$RUST_HASH" ] && sed -i "s/^PKG_HASH:=.*/PKG_HASH:=$RUST_HASH/" "$RUST_MK"
+
+# 【关键】开启下载预编译 LLVM 模式，防止磁盘空间爆满
+if grep -q "download-ci-llvm" "$RUST_MK"; then
+    echo ">>> 开启 download-ci-llvm 以节省磁盘空间"
+    sed -i 's/download-ci-llvm=false/download-ci-llvm=true/g' "$RUST_MK"
+fi
+
+# 修正源码下载地址
+sed -i 's|^PKG_SOURCE_URL:=.*|PKG_SOURCE_URL:=https://static.rust-lang.org/dist/|' "$RUST_MK"
+
+# 5. 预下载源码（使用国内镜像加速）
+RUST_FILE="rustc-${RUST_VER}-src.tar.xz"
+DL_PATH="$DL_DIR/$RUST_FILE"
+mkdir -p "$DL_DIR"
+
+if [ ! -s "$DL_PATH" ]; then
+    echo ">>> 正在预下载 Rust 源码包..."
+    MIRRORS=(
+        "https://mirrors.ustc.edu.cn/rust-static/dist/${RUST_FILE}"
+        "https://mirrors.tuna.tsinghua.edu.cn/rustup/dist/${RUST_FILE}"
+        "https://static.rust-lang.org/dist/${RUST_FILE}"
+    )
+
+    for mirror in "${MIRRORS[@]}"; do
+        echo ">>> 尝试镜像: $mirror"
+        if wget --timeout=20 --tries=2 -O "$DL_PATH" "$mirror"; then
+            if [ -s "$DL_PATH" ]; then
+                echo "✅ 源码已成功缓存至 $DL_PATH"
+                break
+            fi
+        fi
+    done
+else
+    echo ">>> 源码已存在，跳过下载。"
+fi
+
+echo "=========================================="
+echo "✅ 针对 $OPENWRT_ROOT 的 Rust 修复已完成"
+echo "=========================================="
 
 # =========================================================
 # 智能修复脚本（兼容 package/ 和 feeds/）
