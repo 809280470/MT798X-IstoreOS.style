@@ -10,114 +10,111 @@
 # See /LICENSE for more information.
 #
 
+#!/bin/bash
 echo "=========================================="
-echo "Rust 编译修复脚本 (路径增强版)"
+echo "Rust 24.10 深度修复脚本 (同步 Makefile & Patches)"
 echo "=========================================="
 
-# 1. 环境检查与路径识别
-# 优先使用脚本后的第一个参数作为路径，否则使用当前路径
+# 1. 路径识别
 TARGET_DIR="${1:-$(pwd)}"
 
-# 检查是否是有效的 OpenWrt 源码目录
 check_openwrt_root() {
-    if [ -f "$1/scripts/feeds" ] && [ -f "$1/Makefile" ]; then
-        return 0
-    else
-        return 1
-    fi
+    [ -f "$1/scripts/feeds" ] && [ -f "$1/Makefile" ]
 }
 
 if check_openwrt_root "$TARGET_DIR"; then
     OPENWRT_ROOT="$TARGET_DIR"
     echo "✅ 找到 OpenWrt 根目录: $OPENWRT_ROOT"
 else
-    echo "⚠️  在 $TARGET_DIR 未找到 OpenWrt 源码"
-    echo "正在尝试寻找当前目录下的子目录..."
-    # 尝试在子目录中寻找一级
-    SUB_DIR=$(find . -maxdepth 2 -name "scripts" -type d | head -n 1 | xargs dirname)
+    SUB_DIR=$(find . -maxdepth 2 -name "scripts" -type d | head -n 1 | xargs dirname 2>/dev/null)
     if [ -n "$SUB_DIR" ] && check_openwrt_root "$SUB_DIR"; then
         OPENWRT_ROOT="$(realpath "$SUB_DIR")"
-        echo "✅ 在子目录中找到 OpenWrt 根目录: $OPENWRT_ROOT"
+        echo "✅ 在子目录找到 OpenWrt 根目录: $OPENWRT_ROOT"
     else
         echo "❌ 错误: 无法确定 OpenWrt 源码根目录。"
-        echo "用法: $0 /your/openwrt/path"
         exit 1
     fi
 fi
 
-# 定义相关路径
+# 定义核心路径
 RUST_DIR="$OPENWRT_ROOT/feeds/packages/lang/rust"
-RUST_MK="$RUST_DIR/Makefile"
 DL_DIR="$OPENWRT_ROOT/dl"
+BUILD_DIR_HOST="$OPENWRT_ROOT/build_dir/host/rustc-*" # 清理宿主机编译残余
+BUILD_DIR_TARGET="$OPENWRT_ROOT/build_dir/target-*/host/rustc-*" 
 
-# 2. 确保 Rust 文件夹存在
-if [ ! -d "$RUST_DIR" ]; then
-    echo ">>> Rust 文件夹缺失，正在尝试同步 Feeds..."
-    cd "$OPENWRT_ROOT" || exit
-    ./scripts/feeds update packages
-    ./scripts/feeds install -a -p packages
-    cd - > /dev/null || exit
+# 2. 彻底清理旧的 Rust 残余 (防止 Cargo.toml.orig 报错持续存在)
+echo ">>> 清理旧的编译残余和不匹配的补丁..."
+rm -rf "$RUST_DIR"
+rm -rf $BUILD_DIR_HOST
+rm -rf $BUILD_DIR_TARGET
+
+# 3. 从官方 24.10 仓库克隆完整的 Rust 定义 (含 Makefile 和 Patches)
+echo ">>> 正在从官方 24.10 仓库同步 Rust 构建脚本..."
+mkdir -p "$RUST_DIR"
+# 使用 git 直接抓取该文件夹，确保 Makefile 和 patches 文件夹版本完全一致
+TEMP_REPO="/tmp/openwrt_pkg_rust"
+rm -rf "$TEMP_REPO"
+git clone --depth=1 -b openwrt-24.10 https://github.com/openwrt/packages.git "$TEMP_REPO"
+cp -r "$TEMP_REPO/lang/rust/"* "$RUST_DIR/"
+rm -rf "$TEMP_REPO"
+
+RUST_MK="$RUST_DIR/Makefile"
+if [ ! -f "$RUST_MK" ]; then
+    echo "❌ 错误: 无法获取官方 24.10 Rust Makefile"
+    exit 1
 fi
 
-# 3. 获取权威版本信息 (使用 24.10 作为参考标准)
-REF_MK="/tmp/rust_ref.mk"
-IMM_URL="https://raw.githubusercontent.com/openwrt/packages/openwrt-24.10/lang/rust/Makefile"
+# 4. 解析版本号与 Hash (用于后续下载校验)
+RUST_VER=$(grep '^PKG_VERSION:=' "$RUST_MK" | head -1 | cut -d'=' -f2 | tr -d ' ')
+RUST_HASH=$(grep '^PKG_HASH:=' "$RUST_MK" | head -1 | cut -d'=' -f2 | tr -d ' ')
+echo ">>> 官方 24.10 Rust 版本: $RUST_VER"
 
-echo ">>> 正在获取远程版本元数据..."
-if ! curl -fsSL "$IMM_URL" -o "$REF_MK"; then
-    echo "⚠️ 无法获取远程 Makefile，将使用本地版本"
-    [ -f "$RUST_MK" ] && cp "$RUST_MK" "$REF_MK" || { echo "❌ 无法找到任何 Makefile"; exit 1; }
-fi
-
-RUST_VER=$(grep '^PKG_VERSION:=' "$REF_MK" | head -1 | cut -d'=' -f2 | tr -d ' ')
-RUST_HASH=$(grep '^PKG_HASH:=' "$REF_MK" | head -1 | cut -d'=' -f2 | tr -d ' ')
-
-echo ">>> 目标 Rust 版本: $RUST_VER"
-
-# 4. 修改 Makefile 参数
-echo ">>> 正在应用优化参数到: $RUST_MK"
-
-# 更新版本号和 Hash
-sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=$RUST_VER/" "$RUST_MK"
-[ -n "$RUST_HASH" ] && sed -i "s/^PKG_HASH:=.*/PKG_HASH:=$RUST_HASH/" "$RUST_MK"
-
-# 【关键】开启下载预编译 LLVM 模式，防止磁盘空间爆满
-if grep -q "download-ci-llvm" "$RUST_MK"; then
-    echo ">>> 开启 download-ci-llvm 以节省磁盘空间"
-    sed -i 's/download-ci-llvm=false/download-ci-llvm=true/g' "$RUST_MK"
-fi
-
-# 修正源码下载地址
+# 5. 修改优化参数 (开启 CI LLVM 模式)
+echo ">>> 正在应用优化参数 (强制开启 download-ci-llvm)..."
+# 无论原本如何，统一改为 true，解决磁盘空间问题
+sed -i 's/download-ci-llvm:=false/download-ci-llvm:=true/g' "$RUST_MK"
+sed -i 's/download-ci-llvm=false/download-ci-llvm=true/g' "$RUST_MK"
+# 修正地址为标准分发地址
 sed -i 's|^PKG_SOURCE_URL:=.*|PKG_SOURCE_URL:=https://static.rust-lang.org/dist/|' "$RUST_MK"
 
-# 5. 预下载源码（使用国内镜像加速）
+# 6. 预下载并执行 Hash 校验
 RUST_FILE="rustc-${RUST_VER}-src.tar.xz"
 DL_PATH="$DL_DIR/$RUST_FILE"
 mkdir -p "$DL_DIR"
 
+download_rust() {
+    local url=$1
+    echo ">>> 尝试从 $url 下载..."
+    wget -t 2 -T 20 -O "$DL_PATH" "$url"
+}
+
 if [ ! -s "$DL_PATH" ]; then
-    echo ">>> 正在预下载 Rust 源码包..."
+    # 尝试镜像站
     MIRRORS=(
         "https://mirrors.ustc.edu.cn/rust-static/dist/${RUST_FILE}"
         "https://mirrors.tuna.tsinghua.edu.cn/rustup/dist/${RUST_FILE}"
         "https://static.rust-lang.org/dist/${RUST_FILE}"
     )
-
-    for mirror in "${MIRRORS[@]}"; do
-        echo ">>> 尝试镜像: $mirror"
-        if wget --timeout=20 --tries=2 -O "$DL_PATH" "$mirror"; then
-            if [ -s "$DL_PATH" ]; then
-                echo "✅ 源码已成功缓存至 $DL_PATH"
-                break
-            fi
-        fi
+    for m in "${MIRRORS[@]}"; do
+        download_rust "$m" && [ -s "$DL_PATH" ] && break
     done
-else
-    echo ">>> 源码已存在，跳过下载。"
+fi
+
+# 校验文件完整性
+if [ -f "$DL_PATH" ] && [ -n "$RUST_HASH" ]; then
+    echo ">>> 正在校验源码包 Hash..."
+    LOCAL_HASH=$(sha256sum "$DL_PATH" | cut -d' ' -f1)
+    if [ "$LOCAL_HASH" != "$RUST_HASH" ]; then
+        echo "⚠️ Hash 不匹配！正在删除损坏的文件并准备重新编译下载..."
+        rm -f "$DL_PATH"
+    else
+        echo "✅ Hash 校验通过，源码完整。"
+    fi
 fi
 
 echo "=========================================="
-echo "✅ 针对 $OPENWRT_ROOT 的 Rust 修复已完成"
+echo "✅ Rust 24.10 深度同步完成"
+echo "提示: 已同步 Makefile 和 Patches，并开启了 CI-LLVM"
 echo "=========================================="
 
 # =========================================================
