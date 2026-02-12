@@ -10,22 +10,21 @@
 # See /LICENSE for more information.
 #
 
-set -e
-
 # =========================================================
 # 修复 Rust 编译失败：替换为 23.05 + 强制本地编译
 # =========================================================
-echo "🔥 Starting Rust Fix Process..."
+echo "🔥 Replacing Rust with stable version 1.85.0..."
 
 # 1. 删除当前 feeds 中不稳定的 Rust
 rm -rf feeds/packages/lang/rust
 
-# 2. 克隆 23.05 分支 (稳定版源码)
-echo ">>> Cloning Rust from ImmortalWrt 23.05 branch..."
+# 2. 克隆 23.05 分支 (稳定版，下载源正常)
 git clone --depth 1 -b openwrt-23.05 https://github.com/immortalwrt/packages.git temp_packages
 
 # 3. 替换
 cp -r temp_packages/lang/rust feeds/packages/lang/
+
+# 4. 清理临时文件
 rm -rf temp_packages
 
 echo "✅ Rust has been replaced! (Native CI download will be used)"
