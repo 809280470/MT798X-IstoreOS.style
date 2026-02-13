@@ -213,28 +213,33 @@ echo "✅ 默认主题修改完成：Argon 现在是唯一的默认选项。"
 sed -i 's/CONFIGURE_ARGS +=/CONFIGURE_ARGS += --disable-werror/' feeds/packages/libs/libxcrypt/Makefile
 
 # =========================================================
-# 智能修改 Tailscale 菜单归类 (自动定位文件)
+# 终极修改 Tailscale 菜单归类 (内容追踪版)
 # =========================================================
 
-echo ">>> 正在搜索并修改 Tailscale 菜单归类..."
+echo ">>> 正在通过内容搜索定位 Tailscale 菜单定义..."
 
-# 使用 find 自动寻找这个 JSON 文件，不管它在 package/tailscale 里的哪个角落
-TS_JSON_FILE=$(find package/tailscale -name "luci-app-tailscale-community.json" -o -name "tailscale.json" | head -n 1)
+# 直接在 tailscale 源码目录下搜索包含 "admin/services/tailscale" 的所有文件
+# 这样能精准找到定义菜单位置的地方，不管它是 JSON 还是 Lua
+TS_FILES=$(grep -rl "admin/services/tailscale" package/tailscale)
 
-if [ -f "$TS_JSON_FILE" ]; then
-    echo "✅ 找到菜单文件: $TS_JSON_FILE"
-    # 执行修改：将 admin/services/tailscale 修改为 admin/vpn/tailscale
-    sed -i 's|admin/services/tailscale|admin/vpn/tailscale|g' "$TS_JSON_FILE"
-    
-    # 兼容性补充：如果文件中存在 "parent": "luci.services" 也一并修改
-    sed -i 's/"parent": "luci.services"/"parent": "luci.vpn"/g' "$TS_JSON_FILE"
-    
-    echo "✅ Tailscale 菜单已成功移动到 VPN 分类"
+if [ -n "$TS_FILES" ]; then
+    for file in $TS_FILES; do
+        # 排除 acl.d 文件夹（权限文件），我们只改真正的菜单定义
+        if [[ "$file" == *"acl.d"* ]]; then
+            echo "Skipping ACL file: $file"
+            continue
+        fi
+        
+        echo "✅ 发现真正的菜单定义文件: $file"
+        # 执行替换
+        sed -i 's|admin/services/tailscale|admin/vpn/tailscale|g' "$file"
+        
+        # 针对某些版本可能存在的 parent 字段也进行加固修改
+        sed -i 's/"parent": "luci.services"/"parent": "luci.vpn"/g' "$file"
+    done
+    echo "✅ Tailscale 菜单位置修改尝试完成"
 else
-    echo "❌ 错误: 在 package/tailscale 中找不到 Tailscale 的菜单配置文件！"
-    # 打印一下当前的目录结构，方便在 Actions 日志里排错
-    echo "Debug: 当前 package/tailscale 目录结构如下："
-    ls -R package/tailscale | head -n 20
+    echo "❌ 错误: 未能在源码中搜寻到菜单位置定义，请检查源码结构。"
 fi
 
 # 自定义默认网关，后方的192.168.30.1即是可自定义的部分
