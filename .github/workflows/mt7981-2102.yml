@@ -19,8 +19,8 @@ env:
   CONFIG_FILE: mt7981-2102.config
   # 自定义脚本 1 (在更新 feeds 之前运行)
   DIY_P1_SH: diy-part1.sh
-  # 自定义脚本 2 (在更新 feeds 之后运行)
-  DIY_P2_SH: diy-part2.sh
+  # 自定义脚本 3 (在更新 feeds 之后运行)
+  DIY_P2_SH: diy-part3.sh
   # 上传 bin 目录 (包含所有 ipk)
   UPLOAD_BIN_DIR: true
   # 上传固件目录 (包含 img/bin)
@@ -131,14 +131,14 @@ jobs:
     - name: Install feeds （Feeds安装）
       run: cd openwrt && ./scripts/feeds install -a
 
-    # 6. 加载自定义配置 (diy-part2.sh)
-    - name: Load custom configuration （加载自定义配置diy-part2）
+    # 6. 加载自定义配置 (diy-part3.sh)
+    - name: Load custom configuration （加载自定义配置diy-part3）
       run: |
         [ -e files ] && mv files openwrt/files
         [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
-        chmod +x $DIY_P2_SH
+        chmod +x $DIY_P3_SH
         cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P2_SH
+        $GITHUB_WORKSPACE/$DIY_P3_SH
 
     # 7. SSH 调试 (可选)
     - name: SSH connection to Actions （SSH 调试）
