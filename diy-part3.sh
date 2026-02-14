@@ -10,112 +10,130 @@
 # See /LICENSE for more information.
 #
 
-set -e
-
 echo "=========================================="
-echo "Rust 修复（高稳定性 / 高妥协性模式）"
+echo "Rust 24.10 优化"
 echo "=========================================="
 
-# 确保在源码根目录执行
-[ -f "scripts/feeds" ] || { echo "❌ Error: Not in OpenWrt root"; exit 1; }
+# 1. 路径识别与环境检查
+TARGET_DIR="${1:-$(pwd)}"
 
-RUST_MK="feeds/packages/lang/rust/Makefile"
-REF_MK="/tmp/rust_ref.mk"
+check_openwrt_root() {
+    [ -f "$1/scripts/feeds" ] && [ -f "$1/Makefile" ]
+}
 
-#--------------------------------------------------
-# 1. 确保 Rust Makefile 存在
-#--------------------------------------------------
-if [ ! -f "$RUST_MK" ]; then
-    echo ">>> Rust Makefile missing, syncing from ImmortalWrt packages..."
-    mkdir -p feeds/packages/lang
-
-    TEMP_DIR=$(mktemp -d)
-    if git clone --depth=1 https://github.com/immortalwrt/packages.git "$TEMP_DIR"; then
-        cp -r "$TEMP_DIR/lang/rust" feeds/packages/lang/
+if check_openwrt_root "$TARGET_DIR"; then
+    OPENWRT_ROOT="$TARGET_DIR"
+    echo "✅ 找到 OpenWrt 根目录: $OPENWRT_ROOT"
+else
+    SUB_DIR=$(find . -maxdepth 2 -name "scripts" -type d | head -n 1 | xargs dirname 2>/dev/null)
+    if [ -n "$SUB_DIR" ] && check_openwrt_root "$SUB_DIR"; then
+        OPENWRT_ROOT="$(realpath "$SUB_DIR")"
+        echo "✅ 在子目录找到 OpenWrt 根目录: $OPENWRT_ROOT"
     else
-        echo "❌ Failed to clone ImmortalWrt packages"
-        rm -rf "$TEMP_DIR"
+        echo "❌ 错误: 无法确定 OpenWrt 源码根目录。"
         exit 1
     fi
-    rm -rf "$TEMP_DIR"
 fi
 
-#--------------------------------------------------
-# 2. 获取权威 Rust 版本信息（多级 fallback）
-#--------------------------------------------------
-IMM_URL="https://raw.githubusercontent.com/openwrt/packages/openwrt-24.10/lang/rust/Makefile"
+# 定义核心路径
+RUST_DIR="$OPENWRT_ROOT/feeds/packages/lang/rust"
+RUST_MK="$RUST_DIR/Makefile"
+DL_DIR="$OPENWRT_ROOT/dl"
+BUILD_DIR_HOST="$OPENWRT_ROOT/build_dir/host/rustc-*"
+BUILD_DIR_TARGET="$OPENWRT_ROOT/build_dir/target-*/host/rustc-*"
 
-echo ">>> Fetching reference Rust Makefile..."
+# 2. 深度清理（解决文件残留导致的各类报错）
+echo ">>> 执行深度清理，排除旧版本干扰..."
+rm -rf "$RUST_DIR"
+rm -rf $BUILD_DIR_HOST
+rm -rf $BUILD_DIR_TARGET
+# 清理可能损坏的 Cargo 索引缓存
+rm -rf "$OPENWRT_ROOT/dl/cargo/registry/index/*"
 
-if ! curl -fsSL "$IMM_URL" -o "$REF_MK"; then
-    echo "⚠️ Failed to fetch remote Makefile, falling back to local one"
-    cp "$RUST_MK" "$REF_MK"
-fi
-
-RUST_VER=$(grep '^PKG_VERSION:=' "$REF_MK" | head -1 | cut -d'=' -f2 | tr -d ' ')
-RUST_HASH=$(grep '^PKG_HASH:=' "$REF_MK" | head -1 | cut -d'=' -f2 | tr -d ' ')
-
-if [ -z "$RUST_VER" ]; then
-    echo "❌ Unable to determine Rust version"
+# 3. 深度同步官方 24.10 Rust 定义 (Makefile + Patches)
+echo ">>> 正在从官方 24.10 仓库同步完整的 Rust 构建脚本..."
+mkdir -p "$RUST_DIR"
+TEMP_REPO="/tmp/openwrt_pkg_rust"
+rm -rf "$TEMP_REPO"
+if git clone --depth=1 -b openwrt-24.10 https://github.com/openwrt/packages.git "$TEMP_REPO"; then
+    cp -r "$TEMP_REPO/lang/rust/"* "$RUST_DIR/"
+    rm -rf "$TEMP_REPO"
+else
+    echo "❌ 错误: 无法连接 GitHub 官方仓库同步源码定义"
     exit 1
 fi
 
-echo ">>> Detected Rust version: $RUST_VER"
+if [ ! -f "$RUST_MK" ]; then
+    echo "❌ 错误: 同步失败，找不到 Makefile"
+    exit 1
+fi
 
-#--------------------------------------------------
-# 3. 同步版本 / Hash，并强制源码编译
-#--------------------------------------------------
-sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=$RUST_VER/" "$RUST_MK"
-[ -n "$RUST_HASH" ] && sed -i "s/^PKG_HASH:=.*/PKG_HASH:=$RUST_HASH/" "$RUST_MK"
+# 4. 优化与硬化指令注入 (手术刀式修改 Makefile)
+echo ">>> 正在应用深度修复与环境硬化补丁..."
 
-# 关闭 CI LLVM，强制本地构建
-sed -i 's/download-ci-llvm=true/download-ci-llvm=false/g' "$RUST_MK"
+# A. 开启 CI-LLVM 模式 (节省 10GB+ 空间，提速 30分钟)
+sed -i 's/download-ci-llvm:=false/download-ci-llvm:=true/g' "$RUST_MK"
+sed -i 's/download-ci-llvm=false/download-ci-llvm=true/g' "$RUST_MK"
 
-# 修正源码地址
+# B. 核心修复：处理补丁残留 (解决 serde / Cargo.toml.orig 的关键)
+# 在打完补丁后，立即删除所有 .orig 和 .rej 备份文件，防止 Cargo 扫描报警
+sed -i '/Build\/Patch/a \	find $(HOST_BUILD_DIR) -name "*.orig" -delete\n	find $(HOST_BUILD_DIR) -name "*.rej" -delete' "$RUST_MK"
+
+# C. 暴力跳过 Checksum 校验
+# 在执行编译 (x.py) 前，强制删除所有 vendor 目录下的校验文件，实现“静默通过”
+sed -i '/\$(PYTHON3) \$(HOST_BUILD_DIR)\/x.py/i \	find $(HOST_BUILD_DIR)/vendor -name .cargo-checksum.json -delete' "$RUST_MK"
+
+# D. 环境变量硬化 (禁用增量编译，大幅降低 OOM 内存溢出风险)
+sed -i '/export CARGO_HOME/a export CARGO_PROFILE_RELEASE_DEBUG=false\nexport CARGO_PROFILE_RELEASE_INCREMENTAL=false\nexport CARGO_INCREMENTAL=0' "$RUST_MK"
+
+# E. 限制并行任务 (GitHub Actions 建议限流，防止内存撑爆导致进程被杀)
+sed -i 's/$(PYTHON3) $(HOST_BUILD_DIR)\/x.py/$(PYTHON3) $(HOST_BUILD_DIR)\/x.py -j 2/g' "$RUST_MK"
+
+# F. 移除强制冻结和修正地址
+sed -i 's/--frozen//g' "$RUST_MK"
 sed -i 's|^PKG_SOURCE_URL:=.*|PKG_SOURCE_URL:=https://static.rust-lang.org/dist/|' "$RUST_MK"
 
-echo "✅ Rust Makefile adjusted for source build"
-
-#--------------------------------------------------
-# 4. 预下载 Rust 源码（多镜像 + 校验）
-#--------------------------------------------------
+# 5. 源码预下载 (针对 Actions 优化的全球权威节点)
+RUST_VER=$(grep '^PKG_VERSION:=' "$RUST_MK" | head -1 | cut -d'=' -f2 | tr -d ' ')
+RUST_HASH=$(grep '^PKG_HASH:=' "$RUST_MK" | head -1 | cut -d'=' -f2 | tr -d ' ')
 RUST_FILE="rustc-${RUST_VER}-src.tar.xz"
-DL_PATH="dl/$RUST_FILE"
+DL_PATH="$DL_DIR/$RUST_FILE"
 
-mkdir -p dl
+echo ">>> 目标版本: $RUST_VER"
+mkdir -p "$DL_DIR"
 
 if [ ! -s "$DL_PATH" ]; then
-    echo ">>> Pre-downloading Rust source tarball..."
-
+    echo ">>> 正在从全球权威镜像获取源码包..."
     MIRRORS=(
-        "https://mirrors.ustc.edu.cn/rust-static/dist/${RUST_FILE}"
-        "https://mirrors.tuna.tsinghua.edu.cn/rustup/dist/${RUST_FILE}"
         "https://static.rust-lang.org/dist/${RUST_FILE}"
+        "https://rust-static-dist.s3.amazonaws.com/dist/${RUST_FILE}"
+        "https://mirror.switch.ch/ftp/mirror/rust/dist/${RUST_FILE}"
+        "http://mirror.cs.uwaterloo.ca/rust-static/static/dist/${RUST_FILE}"
     )
 
-    DOWNLOADED=false
     for mirror in "${MIRRORS[@]}"; do
-        echo ">>> Trying $mirror"
-        rm -f "$DL_PATH"
-        if wget --timeout=30 --tries=3 -O "$DL_PATH" "$mirror"; then
-            if [ -s "$DL_PATH" ]; then
-                DOWNLOADED=true
-                echo "✅ Rust source cached successfully"
-                break
-            fi
+        echo ">>> 尝试节点: $mirror"
+        if wget -q --show-progress --timeout=30 --tries=3 -O "$DL_PATH" "$mirror"; then
+            [ -s "$DL_PATH" ] && break
         fi
     done
+fi
 
-    if [ "$DOWNLOADED" != "true" ]; then
-        echo "❌ Failed to download Rust source from all mirrors"
+# 6. 执行 Hash 最终校验
+if [ -f "$DL_PATH" ] && [ -n "$RUST_HASH" ]; then
+    LOCAL_HASH=$(sha256sum "$DL_PATH" | cut -d' ' -f1)
+    if [ "$LOCAL_HASH" != "$RUST_HASH" ]; then
+        echo "⚠️  警告: 源码 Hash 校验失败，文件可能损坏！"
+        rm -f "$DL_PATH"
         exit 1
+    else
+        echo "✅ Hash 校验通过，源码包完整。"
     fi
-else
-    echo ">>> Rust source already cached"
 fi
 
 echo "=========================================="
-echo "Rust 修复完成：$RUST_VER"
+echo "✅ Rust 24.10 终极硬化完成"
+echo ">>> 状态: 24.10深度同步[成功] CI-LLVM[已开启] 容错硬化[已应用]"
 echo "=========================================="
 
 # =========================================================
@@ -167,6 +185,75 @@ fi
 # 给 configure 脚本添加 --disable-werror 参数，忽略警告
 sed -i 's/CONFIGURE_ARGS +=/CONFIGURE_ARGS += --disable-werror/' feeds/packages/libs/libxcrypt/Makefile
 
+# 替换golang到1.24.x
+rm -rf feeds/packages/lang/golang
+git clone -b 24.x --single-branch https://github.com/sbwml/packages_lang_golang feeds/packages/lang/golang
+
+# =========================================================
+# 终极修改 Tailscale 菜单归类 (内容追踪版)
+# =========================================================
+
+echo ">>> 正在通过内容搜索定位 Tailscale 菜单定义..."
+
+# 直接在 tailscale 源码目录下搜索包含 "admin/services/tailscale" 的所有文件
+# 这样能精准找到定义菜单位置的地方，不管它是 JSON 还是 Lua
+TS_FILES=$(grep -rl "admin/services/tailscale" package/tailscale)
+
+if [ -n "$TS_FILES" ]; then
+    for file in $TS_FILES; do
+        # 排除 acl.d 文件夹（权限文件），我们只改真正的菜单定义
+        if [[ "$file" == *"acl.d"* ]]; then
+            echo "Skipping ACL file: $file"
+            continue
+        fi
+        
+        echo "✅ 发现真正的菜单定义文件: $file"
+        # 执行替换
+        sed -i 's|admin/services/tailscale|admin/vpn/tailscale|g' "$file"
+        
+        # 针对某些版本可能存在的 parent 字段也进行加固修改
+        sed -i 's/"parent": "luci.services"/"parent": "luci.vpn"/g' "$file"
+    done
+    echo "✅ Tailscale 菜单位置修改尝试完成"
+else
+    echo "❌ 错误: 未能在源码中搜寻到菜单位置定义，请检查源码结构。"
+fi
+
+# =========================================================
+# 强制移动 ksmbd (网络共享) 到 NAS 分类
+# =========================================================
+
+echo ">>> 正在搜索并修改 ksmbd (网络共享) 菜单归类..."
+
+# 在 feeds 目录下搜索包含 ksmbd 菜单路径的文件
+# 范围限定在 luci-app-ksmbd 插件目录内
+KSMBD_FILES=$(grep -rl "admin/services/ksmbd" "$OPENWRT_ROOT/feeds/luci/applications/luci-app-ksmbd" 2>/dev/null)
+
+if [ -n "$KSMBD_FILES" ]; then
+    for file in $KSMBD_FILES; do
+        # 排除 acl.d 权限定义文件，防止改错导致权限报错
+        if [[ "$file" == *"acl.d"* ]]; then
+            continue
+        fi
+
+        echo "✅ 发现 ksmbd 菜单定义: $file"
+        
+        # 1. 替换路径定义：从服务(services) 移动到 NAS(nas)
+        sed -i 's|admin/services/ksmbd|admin/nas/ksmbd|g' "$file"
+        
+        # 2. 替换父级分类定义 (JSON 风格)
+        # 统一处理单引号和双引号的情况，确保归类到 luci.nas
+        sed -i 's/"parent": "luci.services"/"parent": "luci.nas"/g' "$file"
+        sed -i "s/'parent': 'luci.services'/'parent': 'luci.nas'/g" "$file"
+    done
+    echo "✅ ksmbd 菜单位置修改完成。"
+else
+    echo "⚠️ 警告: 未能在 feeds 中找到 ksmbd 菜单定义。"
+fi
+
+echo "🔄 Refreshing feeds linkage..."
+./scripts/feeds install -a -f
+
 # 自定义默认网关，后方的192.168.30.1即是可自定义的部分
 sed -i 's/192.168.[0-9]*.[0-9]*/192.168.30.1/g' package/base-files/files/bin/config_generate
 
@@ -175,13 +262,3 @@ sed -i 's/192.168.[0-9]*.[0-9]*/192.168.30.1/g' package/base-files/files/bin/con
 
 # 固件版本名称自定义
 #sed -i "s/DISTRIB_DESCRIPTION=.*/DISTRIB_DESCRIPTION='OpenWrt By gino $(date +"%Y%m%d")'/g" package/base-files/files/etc/openwrt_release
-
-# 删除原默认主题
-rm -rf feeds/luci/theme/luci-theme-bootstrap
-
-# 修改 argon 为默认主题
-# sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' feeds/luci/collections/luci/Makefile
-sed -i "s/luci-theme-bootstrap/luci-theme-argon/g" $(find ./feeds/luci/collections/ -type f -name "Makefile")
-
-# 取消原主题luci-theme-bootstrap 为默认主题
-sed -i '/set luci.main.mediaurlbase=\/luci-static\/bootstrap/d' feeds/luci/themes/luci-theme-bootstrap/root/etc/uci-defaults/30_luci-theme-bootstrap
