@@ -286,6 +286,9 @@ else
     echo "⚠️ 警告: 未能在 feeds 中找到 ksmbd 菜单定义。"
 fi
 
+echo "🔄 Refreshing feeds linkage..."
+./scripts/feeds install -a -f
+
 # 自定义默认网关，后方的192.168.30.1即是可自定义的部分
 sed -i 's/192.168.[0-9]*.[0-9]*/192.168.30.1/g' package/base-files/files/bin/config_generate
 
