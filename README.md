@@ -12,6 +12,8 @@
 
      默认地址：192.168.30.1  密码：无，直接回车。
 
+H大源码网址: https://github.com/hanwckf/immortalwrt-mt798x
+
 237大佬源码网址: https://github.com/padavanonly/immortalwrt-mt798x-24.10
 
 dailook大佬源码网址: https://github.com/dailook/immortalwrt-mt798x-24.10
