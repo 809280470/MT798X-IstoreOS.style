@@ -18,7 +18,7 @@ env:
   # .config 配置文件名
   CONFIG_FILE: mt7981-2102.config
   # 自定义脚本 1 (在更新 feeds 之前运行)
-  DIY_P1_SH: diy-part1.sh
+  DIY_P4_SH: diy-part4.sh
   # 自定义脚本 3 (在更新 feeds 之后运行)
   DIY_P3_SH: diy-part3.sh
   # 上传 bin 目录 (包含所有 ipk)
@@ -120,9 +120,9 @@ jobs:
     - name: Load custom feeds （加载自定义 Feeds）
       run: |
         [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
-        chmod +x $DIY_P1_SH
+        chmod +x $DIY_P4_SH
         cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P1_SH
+        $GITHUB_WORKSPACE/$DIY_P4_SH
 
     # 5. 更新并安装 Feeds
     - name: Update feeds （Feeds更新）
