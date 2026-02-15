@@ -168,7 +168,6 @@ sed -i 's/CONFIGURE_ARGS +=/CONFIGURE_ARGS += --disable-werror/' feeds/packages/
 # 彻底删除 feeds 里的旧版 Tailscale
 echo "🔧 Removing old Tailscale from feeds..."
 rm -rf feeds/packages/net/tailscale
-
 # 升级 Golang 到 1.24.x
 echo "🔧 Upgrading Golang..."
 rm -rf feeds/packages/lang/golang
