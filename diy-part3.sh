@@ -33,17 +33,9 @@ else
     fi
 fi
 
-#!/bin/bash
-#
-# DIY Part 2 - 同步 ImmortalWrt 官方 Rust 版本
-#
-
 echo "=========================================="
 echo "DIY Part 2: 同步 ImmortalWrt Rust 版本"
 echo "=========================================="
-
-cd openwrt
-
 # 获取官方配置
 echo ">>> 获取 ImmortalWrt openwrt-23.05 Rust 配置..."
 OFFICIAL_URL="https://raw.githubusercontent.com/openwrt/packages/openwrt-23.05/lang/rust/Makefile"
