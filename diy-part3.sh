@@ -33,48 +33,6 @@ else
     fi
 fi
 
-# ----------------------------------------------------------------
-# 2. 处理 Rust (21.02 虽然老，但如果要编 Rust 还是得小心)
-# ----------------------------------------------------------------
-# Hanwckf 21.02 的 feeds 可能比较杂，稳妥起见，把 rust 替换为 openwrt 23.05 的稳定版
-echo "🔧 Fixing Rust environment..."
-rm -rf feeds/packages/lang/rust
-git clone --depth 1 -b openwrt-23.05 https://github.com/openwrt/packages.git /tmp/immortalwrt_packages
-cp -r /tmp/immortalwrt_packages/lang/rust feeds/packages/lang/
-rm -rf /tmp/immortalwrt_packages
-
-# ---------------------------------------------------------
-# 3. QuickStart 首页温度显示修复
-# ---------------------------------------------------------
-echo ">>> 执行 QuickStart 修复..."
-# 获取 GitHub Workspace 根目录 (diy-part2.sh 在 openwrt/ 下运行)
-REPO_ROOT=$(dirname "$(readlink -f "$0")")/.. 
-# 如果在 Actions 环境中，直接使用环境变量更稳
-if [ -n "$GITHUB_WORKSPACE" ]; then
-    REPO_ROOT="$GITHUB_WORKSPACE"
-fi
-
-CUSTOM_LUA="$REPO_ROOT/istore/istore_backend.lua"
-# 查找目标文件 (feeds 和 package 都找)
-TARGET_LUA=$(find feeds package -name "istore_backend.lua" -type f 2>/dev/null | head -n 1)
-
-if [ -n "$TARGET_LUA" ]; then
-    echo "定位到目标文件: $TARGET_LUA"
-    if [ -f "$CUSTOM_LUA" ]; then
-        echo "正在覆盖自定义文件..."
-        cp -f "$CUSTOM_LUA" "$TARGET_LUA"
-        if cmp -s "$CUSTOM_LUA" "$TARGET_LUA"; then
-             echo "✅ QuickStart 修复成功"
-        else
-             echo "❌ 错误: 文件复制校验失败"
-        fi
-    else
-        echo "⚠️ 警告: 仓库中未找到自定义文件 $CUSTOM_LUA"
-    fi
-else
-    echo "⚠️ 警告: 未在源码中找到 istore_backend.lua，跳过修复"
-fi
-
 # ---------------------------------------------------------
 # 4. 其他组件修复与调整
 # ---------------------------------------------------------
