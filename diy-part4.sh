@@ -11,8 +11,6 @@
 #
 
 # 功能插件
-git clone --depth=1 https://github.com/sirpdboy/luci-app-watchdog package/watchdog
-git clone --depth=1 https://github.com/sirpdboy/luci-app-taskplan package/taskplan
 git clone --depth=1 https://github.com/iv7777/luci-app-authshield package/authshield
 git clone --depth=1 https://github.com/selfcan/luci-app-tailscale package/tailscale
 
