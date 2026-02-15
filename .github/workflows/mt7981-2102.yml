@@ -17,7 +17,7 @@ env:
   FEEDS_CONF: feeds.conf.default
   # .config 配置文件名
   CONFIG_FILE: mt7981-2102.config
-  # 自定义脚本 1 (在更新 feeds 之前运行)
+  # 自定义脚本 4 (在更新 feeds 之前运行)
   DIY_P4_SH: diy-part4.sh
   # 自定义脚本 3 (在更新 feeds 之后运行)
   DIY_P3_SH: diy-part3.sh
