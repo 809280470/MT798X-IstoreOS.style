@@ -47,9 +47,6 @@ fi
 # libxcrypt 编译报错修复 (忽略警告)
 sed -i 's/CONFIGURE_ARGS +=/CONFIGURE_ARGS += --disable-werror/' feeds/packages/libs/libxcrypt/Makefile
 
-# 添加 Tailscale 编译
-git clone --depth=1 https://github.com/selfcan/luci-app-tailscale package/tailscale
-
 # ---------------------------------------------------------
 # 3. 菜单位置调整 (Tailscale & KSMBD)
 # ---------------------------------------------------------
@@ -78,9 +75,6 @@ if [ -n "$KSMBD_FILES" ]; then
     done
     echo "✅ KSMBD 菜单已移动到 NAS"
 fi
-
-# 添加 openwrt 18.06-21.02-22.03插件库
-git clone --depth=1 -b Immortalwrt https://github.com/makebl/openwrt-package  package/openwrt1package
 
 # ----------------------------------------------------------------
 # 4. 【最关键一步】强制重新注册所有 Feeds
