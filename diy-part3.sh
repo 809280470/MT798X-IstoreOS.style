@@ -79,6 +79,9 @@ if [ -n "$KSMBD_FILES" ]; then
     echo "✅ KSMBD 菜单已移动到 NAS"
 fi
 
+# 添加 openwrt 18.06-21.02-22.03插件库
+git clone --depth=1 -b Immortalwrt https://github.com/shidahuilang/openwrt-package  package/openwrt1package
+
 # ----------------------------------------------------------------
 # 6. 【最关键一步】强制重新注册所有 Feeds
 # ----------------------------------------------------------------
