@@ -1,8 +1,8 @@
 #!/bin/bash
 #
 # https://github.com/P3TERX/Actions-OpenWrt
-# File name: diy-part2.sh
-# Description: OpenWrt DIY script part 2 (After Update feeds)
+# File name: diy-part3.sh
+# Description: OpenWrt DIY script part 3 (After Update feeds)
 #
 
 echo "=========================================="
@@ -34,7 +34,7 @@ else
 fi
 
 # ---------------------------------------------------------
-# 4. 其他组件修复与调整
+# 2. 其他组件修复与调整
 # ---------------------------------------------------------
 
 # DiskMan 依赖修复
@@ -51,7 +51,7 @@ sed -i 's/CONFIGURE_ARGS +=/CONFIGURE_ARGS += --disable-werror/' feeds/packages/
 git clone --depth=1 https://github.com/selfcan/luci-app-tailscale package/tailscale
 
 # ---------------------------------------------------------
-# 5. 菜单位置调整 (Tailscale & KSMBD)
+# 3. 菜单位置调整 (Tailscale & KSMBD)
 # ---------------------------------------------------------
 echo ">>> 调整插件菜单位置..."
 
@@ -83,7 +83,7 @@ fi
 git clone --depth=1 -b Immortalwrt https://github.com/makebl/openwrt-package  package/openwrt1package
 
 # ----------------------------------------------------------------
-# 6. 【最关键一步】强制重新注册所有 Feeds
+# 4. 【最关键一步】强制重新注册所有 Feeds
 # ----------------------------------------------------------------
 # 这一步将修复 "does not exist" 的错误
 echo "🔄 Re-installing all feeds..."
