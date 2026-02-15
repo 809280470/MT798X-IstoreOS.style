@@ -116,7 +116,7 @@ jobs:
         git clone $REPO_URL -b $REPO_BRANCH --single-branch openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
-    # 4. 加载自定义 Feeds (diy-part1.sh)
+    # 4. 加载自定义 Feeds (diy-part4.sh)
     - name: Load custom feeds （加载自定义 Feeds）
       run: |
         [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
