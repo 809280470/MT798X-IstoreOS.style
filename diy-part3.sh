@@ -56,6 +56,11 @@ git clone --depth 1 -b openwrt-23.05 https://github.com/immortalwrt/packages.git
 mkdir -p feeds/packages/lang
 cp -r /tmp/temp_packages/lang/rust feeds/packages/lang/
 
+# 4. 清理临时文件
+rm -rf /tmp/temp_packages
+
+echo "✅ Rust replaced with version from 23.05 branch!"
+
 # DiskMan 依赖修复
 DM_MAKEFILE=$(find feeds/luci -name "Makefile" | grep "luci-app-diskman")
 if [ -f "$DM_MAKEFILE" ]; then
