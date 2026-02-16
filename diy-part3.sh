@@ -47,6 +47,10 @@ fi
 # libxcrypt 编译报错修复 (忽略警告)
 sed -i 's/CONFIGURE_ARGS +=/CONFIGURE_ARGS += --disable-werror/' feeds/packages/libs/libxcrypt/Makefile
 
+# 换更新 go
+rm -rf feeds/packages/lang/golang
+git clone https://github.com/sbwml/packages_lang_golang -b 24.x feeds/packages/lang/golang
+
 # ---------------------------------------------------------
 # 3. 菜单位置调整 (Tailscale & KSMBD)
 # ---------------------------------------------------------
