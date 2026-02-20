@@ -16,14 +16,14 @@ git clone --depth=1 https://github.com/linkease/nas-packages  package/nas
 git clone --depth=1 https://github.com/linkease/nas-packages-luci  package/nas-luci
 
 # 科学插件
-git clone --depth=1 https://github.com/Openwrt-Passwall/openwrt-passwall  package/passwall
-git clone --depth=1 https://github.com/Openwrt-Passwall/openwrt-passwall2  package/passwall2
+# git clone --depth=1 https://github.com/Openwrt-Passwall/openwrt-passwall  package/passwall
+# git clone --depth=1 https://github.com/Openwrt-Passwall/openwrt-passwall2  package/passwall2
 # git clone --depth=1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages  package/passwall-packages
-git clone --depth=1 -b master https://github.com/vernesong/OpenClash  package/OpenClash
+# git clone --depth=1 -b master https://github.com/vernesong/OpenClash  package/OpenClash
 git clone --depth=1 https://github.com/nikkinikki-org/OpenWrt-nikki  package/nikki
-git clone --depth=1 https://github.com/nikkinikki-org/OpenWrt-momo  package/momo
+# git clone --depth=1 https://github.com/nikkinikki-org/OpenWrt-momo  package/momo
 git clone --depth=1 -b master https://github.com/QiuSimons/luci-app-daed  package/daed
-git clone --depth=1 -b master https://github.com/fw876/helloworld  package/helloworld
+# git clone --depth=1 -b master https://github.com/fw876/helloworld  package/helloworld
 
 # 功能插件
 git clone --depth=1 https://github.com/sirpdboy/luci-app-watchdog package/watchdog
