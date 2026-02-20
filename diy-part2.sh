@@ -201,29 +201,7 @@ rm $WORKINGDIR/${LUCIBRANCH}.zip
 # ---------------------------------------------------------
 echo ">>> 调整插件菜单位置..."
 
-# 5.1 Tailscale -> VPN
-TS_FILES=$(grep -rl "admin/services/tailscale" package/tailscale 2>/dev/null)
-if [ -n "$TS_FILES" ]; then
-    for file in $TS_FILES; do
-        [[ "$file" == *"acl.d"* ]] && continue
-        sed -i 's|admin/services/tailscale|admin/vpn/tailscale|g' "$file"
-        sed -i 's/"parent": "luci.services"/"parent": "luci.vpn"/g' "$file"
-    done
-    echo "✅ Tailscale 菜单已移动到 VPN"
-fi
 
-# 5.2 KSMBD -> NAS
-# 扩大搜索范围，防止文件不在预期位置
-KSMBD_FILES=$(grep -rl "admin/services/ksmbd" feeds package 2>/dev/null)
-if [ -n "$KSMBD_FILES" ]; then
-    for file in $KSMBD_FILES; do
-        [[ "$file" == *"acl.d"* ]] && continue
-        sed -i 's|admin/services/ksmbd|admin/nas/ksmbd|g' "$file"
-        sed -i 's/"parent": "luci.services"/"parent": "luci.nas"/g' "$file"
-        sed -i "s/'parent': 'luci.services'/'parent': 'luci.nas'/g" "$file"
-    done
-    echo "✅ KSMBD 菜单已移动到 NAS"
-fi
 
 # ----------------------------------------------------------------
 # 6. 【最关键一步】强制重新注册所有 Feeds
