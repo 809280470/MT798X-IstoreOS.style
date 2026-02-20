@@ -196,10 +196,6 @@ mv $WORKINGDIR/luci-app-smartdns-${LUCIBRANCH}/* $WORKINGDIR/
 rmdir $WORKINGDIR/luci-app-smartdns-${LUCIBRANCH}
 rm $WORKINGDIR/${LUCIBRANCH}.zip
 
-# ---------------------------------------------------------
-# 5. 菜单位置调整 (Tailscale & KSMBD)
-# ---------------------------------------------------------
-echo ">>> 调整插件菜单位置..."
 
 
 
