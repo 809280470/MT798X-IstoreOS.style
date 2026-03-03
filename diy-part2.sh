@@ -111,24 +111,15 @@ mv $WORKINGDIR/luci-app-smartdns-${LUCIBRANCH}/* $WORKINGDIR/
 rmdir $WORKINGDIR/luci-app-smartdns-${LUCIBRANCH}
 rm $WORKINGDIR/${LUCIBRANCH}.zip
 
-# 5.1 Tailscale -> VPN 
-TS_DIR=$(find feeds/tailscale_community -type d -name "luci-app-tailscale-community" 2>/dev/null | head -n 1)
-
-if [ -n "$TS_DIR" ]; then
-    echo ">>> 发现 Tailscale 插件目录: $TS_DIR"
-    # 1. 替换菜单路径定义
-    find "$TS_DIR" -type f -name "*.json" -exec sed -i 's|admin/services/tailscale|admin/vpn/tailscale|g' {} +
-    # 2. 替换父级分类定义
-    find "$TS_DIR" -type f -name "*.json" -exec sed -i 's/"parent": "luci.services"/"parent": "luci.vpn"/g' {} +
+# 5.1 Tailscale -> VPN
+TS_FILES=$(grep -rl "admin/services/tailscale" package/tailscale 2>/dev/null)
+if [ -n "$TS_FILES" ]; then
+    for file in $TS_FILES; do
+        [[ "$file" == *"acl.d"* ]] && continue
+        sed -i 's|admin/services/tailscale|admin/vpn/tailscale|g' "$file"
+        sed -i 's/"parent": "luci.services"/"parent": "luci.vpn"/g' "$file"
+    done
     echo "✅ Tailscale 菜单已移动到 VPN"
-else
-    # 备用逻辑：如果 feed 名改了，全盘搜索 package/feeds 内部
-    TS_FILES=$(grep -rl "admin/services/tailscale" package/feeds 2>/dev/null)
-    if [ -n "$TS_FILES" ]; then
-        echo "$TS_FILES" | xargs sed -i 's|admin/services/tailscale|admin/vpn/tailscale|g'
-        echo "$TS_FILES" | xargs sed -i 's/"parent": "luci.services"/"parent": "luci.vpn"/g'
-        echo "✅ Tailscale 菜单(全盘搜索模式)已移动"
-    fi
 fi
 
 # 5.2 KSMBD -> NAS (只在 ksmbd 目录下改)
