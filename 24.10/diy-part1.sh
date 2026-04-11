@@ -71,7 +71,6 @@ UPDATE_PACKAGE "watchdog" "sirpdboy/luci-app-watchdog" "main"  #看门狗
 UPDATE_PACKAGE "netwizard" "sirpdboy/luci-app-netwizard" "main"  #网络设置向导
 UPDATE_PACKAGE "advancedplus" "sirpdboy/luci-app-advancedplus" "main"  #高级设置
 UPDATE_PACKAGE "partexp" "sirpdboy/luci-app-partexp" "main"  #分区助手
-UPDATE_PACKAGE "rtp2httpd" "stackia/rtp2httpd" "main" 
 UPDATE_PACKAGE "openlist2" "sbwml/luci-app-openlist2" "main"    #alist的新替换openlist
 UPDATE_PACKAGE "qbittorrent" "sbwml/luci-app-qbittorrent" "master" "" "qt6base qt6tools rblibtorrent"  #qbittorrent下载
 
